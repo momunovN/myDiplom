@@ -8,28 +8,39 @@ export default function MovieCard({ movie }) {
   return (
     <Link 
       to={`/movie/${movie.id}`} 
-      className="movie-card group block bg-zinc-900 rounded-3xl overflow-hidden"
+      className="group block bg-zinc-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1.5"
     >
       <div className="relative">
         <img 
           src={posterUrl} 
           alt={movie.title} 
-          className="w-full aspect-2/3 object-cover group-hover:scale-110 transition-transform duration-500"
+          className="w-full aspect-2/3 object-cover group-hover:scale-105 transition-transform duration-500"
         />
+        
         {movie.vote_average && (
-          <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm text-white text-sm font-medium px-3 py-1 rounded-2xl flex items-center gap-1">
+          <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md px-3 py-1 rounded-xl text-sm font-semibold flex items-center gap-1 border border-white/10">
             ★ {movie.vote_average.toFixed(1)}
           </div>
         )}
       </div>
-      
-      <div className="p-5">
-        <h3 className="font-semibold text-lg leading-tight line-clamp-2 group-hover:text-red-500 transition-colors">
+
+      <div className="p-4">
+        <h3 className="text-base font-semibold line-clamp-2 text-white group-hover:text-red-500 transition-colors mb-1.5">
           {movie.title}
         </h3>
-        <p className="text-zinc-400 text-sm mt-2">
-          {movie.release_date ? movie.release_date.substring(0, 4) : '—'}
-        </p>
+        
+        <div className="flex justify-between text-xs text-zinc-400">
+          <span>
+            {movie.release_date ? movie.release_date.substring(0, 4) : '—'}
+          </span>
+          {movie.genres && (
+            <span className="line-clamp-1">
+              {Array.isArray(movie.genres) 
+                ? movie.genres.slice(0, 2).join(', ') 
+                : ''}
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );
