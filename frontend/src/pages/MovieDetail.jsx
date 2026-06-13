@@ -39,35 +39,47 @@ export default function MovieDetail() {
     fetchData();
   }, [id]);
 
-  const handleBookSeats = async () => {
-    if (!selectedSession || selectedSeats.length === 0) {
-      return alert("Выберите места!");
+const handleBookSeats = async () => {
+  if (!selectedSession || selectedSeats.length === 0) {
+    return alert("Выберите места!");
+  }
+
+  const token = localStorage.getItem('token'); // ← достаём токен
+  if (!token) {
+    alert("Войдите в аккаунт");
+    navigate('/login');
+    return;
+  }
+
+  try {
+    await axios.post('http://localhost:5000/api/bookings', {
+      sessionId: selectedSession._id,
+      seats: selectedSeats,                    // массив строк, например ["5-12", "5-13"]
+      totalPrice: selectedSeats.length * selectedSession.price
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`       // ← обязательно отправляем токен
+      }
+    });
+
+    alert(`✅ Забронировано ${selectedSeats.length} мест!`);
+    setSelectedSeats([]);
+    setShowSeatMap(false);
+    setSelectedSession(null);
+
+    // Можно обновить список сеансов, чтобы показать актуальное количество свободных мест
+    // window.location.reload(); // или перезапросить сеансы
+
+  } catch (error) {
+    console.error(error);
+    if (error.response?.status === 401) {
+      alert("Сессия истекла. Пожалуйста, войдите заново.");
+      navigate('/login');
+    } else {
+      alert(error.response?.data?.message || "Ошибка бронирования");
     }
-
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user) return alert("Войдите в аккаунт");
-
-    try {
-      await axios.post('/api/bookings', {
-        userId: user.id,
-        movieId: id,
-        movieTitle: movie.title,
-        sessionId: selectedSession._id,
-        sessionTime: selectedSession.time,
-        hall: selectedSession.hall,
-        seats: selectedSeats,
-        totalPrice: selectedSeats.length * selectedSession.price
-      });
-
-      alert(`✅ Забронировано ${selectedSeats.length} мест!`);
-      setSelectedSeats([]);
-      setShowSeatMap(false);
-      setSelectedSession(null);
-    } catch (error) {
-      alert("Ошибка бронирования");
-      console.error(error);
-    }
-  };
+  }
+};
 
   if (loading) return <div className="text-center py-20 text-2xl">Загрузка...</div>;
   if (!movie) return <div>Фильм не найден</div>;

@@ -1,66 +1,83 @@
 import express from 'express';
 import Booking from '../models/Booking.js';
 import Session from '../models/Session.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+// ======================
+// Получить мои бронирования
+// ======================
+router.get('/my', authMiddleware, async (req, res) => {
   try {
-    const { userId, movieId, movieTitle, sessionId, sessionTime, hall, seats, totalPrice } = req.body;
+    const bookings = await Booking.find({ userId: req.user.id })
+      .sort({ createdAt: -1 });
 
-    const booking = new Booking({
-      userId,
-      movieId,
-      movieTitle,
-      sessionId,
-      sessionTime,
-      hall,
-      seats,
-      totalPrice,
-      status: "confirmed"
-    });
-
-    await booking.save();
-
-    await Session.findByIdAndUpdate(sessionId, {
-      $inc: { bookedSeats: seats.length },
-      $push: { bookedSeatsList: { $each: seats } }
-    });
-
-    res.status(201).json({ message: "Бронирование сохранено" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.get('/user/current', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    const bookings = await Booking.find({ userId }).sort({ createdAt: -1 });
     res.json(bookings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+    res.status(500).json({ message: 'Ошибка при получении бронирований' });
   }
 });
 
-// Отмена бронирования + возврат мест
-router.delete('/:id', async (req, res) => {
+// ======================
+// Создать бронирование
+// ======================
+router.post('/', authMiddleware, async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ message: "Бронирование не найдено" });
+    const { sessionId, seats, totalPrice } = req.body;
 
-    // Возвращаем места в сессию
-    await Session.findByIdAndUpdate(booking.sessionId, {
-      $inc: { bookedSeats: -booking.seats.length },
-      $pull: { bookedSeatsList: { $in: booking.seats } }
+    if (!sessionId || !seats || seats.length === 0) {
+      return res.status(400).json({ message: 'Необходимо указать sessionId и seats' });
+    }
+
+    // Находим сеанс
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ message: 'Сеанс не найден' });
+    }
+
+    // Проверяем, не заняты ли уже эти места
+    const alreadyBooked = seats.filter(seat => 
+      session.bookedSeatsList.includes(seat)
+    );
+
+    if (alreadyBooked.length > 0) {
+      return res.status(400).json({
+        message: 'Некоторые места уже забронированы',
+        seats: alreadyBooked
+      });
+    }
+
+    // Добавляем места в сеанс
+    session.bookedSeatsList.push(...seats);
+    session.bookedSeats = session.bookedSeatsList.length;
+    await session.save();
+
+    // Создаём запись о бронировании (для истории)
+    const booking = await Booking.create({
+      userId: req.user.id,
+      movieId: session.movieId,
+      movieTitle: session.movieTitle,
+      sessionId: session._id,
+      sessionTime: session.time,
+      hall: session.hall,
+      seats: seats,
+      totalPrice: totalPrice || (seats.length * session.price),
+      status: 'confirmed'
     });
 
-    await Booking.findByIdAndDelete(req.params.id);
+    res.status(201).json({
+      message: 'Бронирование успешно создано',
+      booking
+    });
 
-    res.json({ message: "Бронирование отменено, места возвращены" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+    res.status(500).json({ 
+      message: 'Ошибка при создании бронирования',
+      error: error.message 
+    });
   }
 });
 
